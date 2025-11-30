@@ -1,55 +1,46 @@
-# Diffusion model training configuration
-# Usage: python train.py config/train_diffusion.py
+# train a diffusion model on shakespeare dataset - cluster version
+# Cluster-optimized configuration
 
 # Model type
 model_type = 'diffusion'  # 'gpt2' or 'diffusion'
 
-# I/O
-out_dir = 'out-diffusion'
-eval_interval = 500
-log_interval = 10
-sample_interval = 500  # Generate samples every N iterations
-eval_only = False
-always_save_checkpoint = True
-init_from = 'scratch'  # 'scratch' or 'resume'
+out_dir = 'out-shakespeare-diffusion'
+eval_interval = 250  # keep frequent because we'll overfit
+sample_interval = 250  # generate samples frequently to see progress
+log_interval = 10  # don't print too too often
 
-# Wandb logging
-wandb_log = True
-wandb_project = 'diffusion'
-wandb_run_name = 'diffusion-shakespeare'
+# we expect to overfit on this small dataset, so only save when val improves
+always_save_checkpoint = False
 
-# Data
-dataset = 'shakespeare'  # Will look for data/shakespeare/shakespeare.txt
+wandb_log = True  # override via command line if you like
+wandb_project = 'shakespeare'
+wandb_run_name = 'mini-diffusion'
+
+dataset = 'shakespeare'
+gradient_accumulation_steps = 1
 batch_size = 64
-block_size = 256  # Sequence length for diffusion
+block_size = 256  # context of up to 256 previous characters
 
-# Model architecture
+# baby Diffusion model :)
 n_layer = 6
 n_head = 6
 n_embd = 384
-dropout = 0.0
-bias = False
+dropout = 0.2
 
 # Diffusion-specific parameters
 diffusion_steps = 128
 context_len = 16  # Number of prefix tokens that are never masked
 confidence_threshold = 0.95  # For confidence-based sampling
 
-# Optimizer
-learning_rate = 3e-4
-max_iters = 20000
-weight_decay = 0.01
-beta1 = 0.9
-beta2 = 0.95
-grad_clip = 1.0
+learning_rate = 1e-3  # with baby networks can afford to go a bit higher
+max_iters = 5000
+lr_decay_iters = 5000  # make equal to max_iters usually
+min_lr = 1e-4  # learning_rate / 10 usually
+beta2 = 0.99  # make a bit bigger because number of tokens per iter is small
 
-# Learning rate decay
-decay_lr = True
-warmup_iters = 1000
-lr_decay_iters = 20000
-min_lr = 3e-5
+warmup_iters = 100  # not super necessary potentially
 
-# System
-device = 'cuda'  # 'cpu', 'cuda', 'cuda:0', 'mps'
-dtype = 'bfloat16'  # 'float32', 'bfloat16', 'float16'
-compile = False  # Use PyTorch 2.0 compile (set to False for debugging)
+# Cluster-specific settings
+device = 'cuda'  # Use GPU
+dtype = 'bfloat16'  # Use bfloat16 for H100/H200
+compile = True  # Enable torch.compile for
