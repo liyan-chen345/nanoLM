@@ -56,6 +56,7 @@ gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
 batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
 sample_batch_size = 1
 block_size = 1024
+data_permuted = False # if True, use get_batch_random_order instead of get_batch
 # model type
 model_type = 'gpt2' # 'gpt2' or 'diffusion'
 # diffusion-specific parameters (only used when model_type='diffusion')
@@ -189,6 +190,51 @@ def get_batch(split):
         return x, y
     elif model_type == 'diffusion':
         return x, x
+    return x, y
+
+def get_batch_random_order(split):
+    if split == 'train':
+        data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
+    else:
+        data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
+    ix = torch.randint(len(data) - block_size, (batch_size,))
+    segments = torch.stack([torch.from_numpy((data[i:i+block_size+1]).astype(np.int64)) for i in ix])
+    permutation_indices = torch.stack([torch.randperm(block_size+1) for _ in range(block_size)])
+    segments_permuted = torch.gather(segments, dim=1, index=permutation_indices)
+    x = segments_permuted[:, :-1]
+    y = segments_permuted[:, 1:]
+    if device_type == 'cuda':
+        # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
+        x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+    else:
+        x, y = x.to(device), y.to(device)
+    return x, y
+
+# Select get_batch implementation based on data_permuted flag
+if data_permuted:
+    get_batch = get_batch_random_order
+
+# diffusion data loader (only used when model_type='diffusion')
+def get_diffusion_data_loader(data_path, batch_size, seq_len, device):
+    """
+    Simple data loader for text data (for diffusion training)
+    """
+    # Read the text file
+    with open(data_path, 'r', encoding='utf-8') as f:
+        text = f.read()
+    # Convert to tokens
+    tokens = encode_text(text)
+    # Create batches
+    num_batches = len(tokens) // (batch_size * seq_len)
+    tokens = tokens[:num_batches * batch_size * seq_len]
+    tokens = tokens.view(batch_size, -1)
+    # Generator function
+    def data_generator():
+        while True:
+            for i in range(0, tokens.size(1) - seq_len, seq_len):
+                batch = tokens[:, i:i+seq_len].to(device)
+                yield batch
+    return data_generator()
 
 # # diffusion data loader (only used when model_type='diffusion')
 # def get_diffusion_data_loader(data_path, batch_size, seq_len, device):
