@@ -24,5 +24,8 @@ source venv/bin/activate
 export WANDB_API_KEY="794c522fe284c988c6504096077f83c779dc3af0"
 export WANDB_START_METHOD="thread"
 
+# Tinker API key
+export TINKER_API_KEY=tml-qsuOJx8ByMWeObWa9bTEGE5ivgL0IPW9OCZd4kE2ShbYTzylSqvm6sGOAfJXtKKtBAAAA
+
 python train.py config/train_shakespeare.py
 python perplexity_curve.py config/train_shakespeare.py
